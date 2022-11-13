@@ -1,9 +1,10 @@
-import datetime
 import os
 
 import jwt
 from flask import Flask, request
 from flask_mysqldb import MySQL
+
+from .utils import create_jwt
 
 server = Flask(__name__)
 mysql = MySQL(server)
@@ -16,7 +17,7 @@ server.config["MYSQL_DB"] = os.environ.get("MYSQL_DB")                   # in te
 server.config["MYSQL_PORT"] = os.environ.get("MYSQL_PORT")               # in terminal-> $ export MYSQL_PORT=
 
 
-# Criar rota login
+# Rota login
 @server.route("/login", methods=["POST"])
 def login():
     auth = request.authorization
@@ -30,7 +31,6 @@ def login():
         "SELECT email, password FROM user WHERE email=%s", (auth.username,)
     )
 
-    
     if res > 0:
         user_row = cur.fetchone()
         email = user_row[0]
@@ -40,13 +40,29 @@ def login():
             return ("invalid credentials", 401)
         
         else:
-            return createJWT(auth.username, os.environ.get("JWT_SECRET"), True)
+            return create_jwt(auth.username, os.environ.get("JWT_SECRET"), True)
     else:
         return ("invalid credentials", 401)
 
+# Rota validar token jwt
+@server.route("/validate", methods=["POST"])
+def validate():
+    encoded_jwt = request.headers["Authorization"]
 
+    if not encoded_jwt:
+        return ("missing credentials", 401)
+
+    encoded_jwt = encoded_jwt.split(" ")[1]
+
+    try:
+        decoded = jwt.decode(
+            encoded_jwt, os.environ.get("JWT_SECRET"), algorithm=["HS256"]
+        )
+    except Exception:
+        return ("not authorized", 403)
+
+    return (decoded, 200)
 
 
 if __name__ == "__main__":
-    print("Rodando")
-    # server.run(host="0.0.0.0", port=5000)
+    server.run(host="0.0.0.0", port=5000)
